@@ -1,0 +1,9 @@
+@import 'tailwindcss' source(none);
+@import './components/button.css';
+
+@source '../views';
+@source '../js';
+
+body {
+    background-color: red;
+}

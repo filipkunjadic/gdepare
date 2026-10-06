@@ -1,0 +1,30 @@
+{
+    "name": "html",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "directories": {
+        "test": "tests"
+    },
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "dev": "vite",
+        "build": "vite build"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/filipkunjadic/gdepare.git"
+    },
+    "keywords": [],
+    "type": "commonjs",
+    "bugs": {
+        "url": "https://github.com/filipkunjadic/gdepare/issues"
+    },
+    "homepage": "https://github.com/filipkunjadic/gdepare#readme",
+    "devDependencies": {
+        "vite": "^8.3.3",
+        "laravel-vite-plugin": "^3.2.0",
+        "@tailwindcss/vite": "^4.3.3",
+        "tailwindcss": "^4.3.3"
+    }
+}
