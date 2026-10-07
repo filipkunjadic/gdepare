@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vue data flow — a visual walkthrough</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, sans-serif; color: #17243b; background: #f1f5fa; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { max-width: 1160px; margin: auto; padding: 40px 24px 72px; }
+    h1 { font-size: clamp(28px, 4vw, 44px); letter-spacing: -.04em; margin: 8px 0 12px; }
+    h2 { font-size: 23px; margin-top: 0; }
+    h3 { margin: 0 0 12px; }
+    p, li { line-height: 1.65; }
+    .eyebrow { color: #375fd0; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    .intro { max-width: 760px; color: #526079; }
+    .panel, .card { background: white; border: 1px solid #dce4ef; border-radius: 16px; padding: 24px; }
+    .panel { margin-top: 24px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .card { border-top: 4px solid var(--accent, #4169e1); }
+    .card p { margin-bottom: 0; }
+    .tag { display: inline-block; background: #eef2ff; padding: 4px 9px; border-radius: 6px; font-size: 12px; font-weight: 700; margin-bottom: 12px; }
+    .muted { color: #58667c; }
+    .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 20px 0; }
+    button, select { font: inherit; border-radius: 8px; padding: 10px 15px; border: 1px solid #cad5e5; background: white; color: #17243b; }
+    button { cursor: pointer; font-weight: 650; }
+    button.primary { background: #3159d9; border-color: #3159d9; color: white; }
+    button:disabled { opacity: .45; cursor: default; }
+    :focus-visible { outline: 3px solid #d68a00; outline-offset: 3px; }
+    .step-label { font-weight: 750; color: #3159d9; }
+    #explanation { min-height: 76px; }
+    .values { display: grid; gap: 10px; margin: 0; }
+    .values div { background: #f3f6fb; border-radius: 8px; padding: 10px; }
+    dt { font-size: 12px; color: #53627a; margin-bottom: 5px; }
+    dd { margin: 0; font-family: ui-monospace, monospace; font-size: 13px; overflow-wrap: anywhere; }
+    .screen { min-height: 158px; background: #f7f9fc; border: 1px dashed #b6c5da; padding: 18px; border-radius: 10px; }
+    .screen ul { padding-left: 20px; }
+    .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 16px 0; }
+    .flow span { background: #edf2ff; padding: 10px 14px; border-radius: 9px; }
+    .arrow { color: #64748b; font-size: 22px; }
+    pre { background: #142238; color: #e0ebff; border-radius: 10px; padding: 18px; overflow-x: auto; line-height: 1.65; font-size: 13px; }
+    code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+    p code, li code, td code { background: #edf1f8; padding: 2px 5px; border-radius: 4px; }
+    details { border-top: 1px solid #e1e7f0; padding: 17px 0; }
+    summary { cursor: pointer; font-weight: 700; line-height: 1.5; }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    table { border-collapse: collapse; width: 100%; font-size: 14px; }
+    th, td { text-align: left; padding: 12px; border-bottom: 1px solid #e1e7f0; line-height: 1.6; }
+    .notice { border-left: 4px solid #208a76; padding: 12px 18px; background: #eefaf6; border-radius: 6px; }
+    @media (max-width: 780px) { .grid, .two { grid-template-columns: 1fr; } main { padding: 24px 14px; } .panel, .card { padding: 18px; } }
+  </style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">Vue · one request, three files</div>
+  <h1>Who does what when data loads?</h1>
+  <p class="intro">Follow a request from opening a page to seeing your cards. This is a standalone demonstration: it simulates the request in this HTML file and never calls your Laravel backend.</p>
+
+  <div class="grid">
+    <article class="card"><span class="tag">The coordinator</span><h2>Page.vue</h2><p>Calls <code>useFetch('/data')</code>, starts loading, and supplies the list HTML.</p></article>
+    <article class="card" style="--accent:#208a76"><span class="tag">The request logic</span><h2>useFetch.js</h2><p>Creates the state and the <code>load()</code> function. Updates data, loading, and error.</p></article>
+    <article class="card" style="--accent:#a66a12"><span class="tag">The display rules</span><h2>LoadingState.vue</h2><p>Receives loading and error props. Shows a message or the page’s slot content.</p></article>
+  </div>
+
+  <section class="panel" aria-labelledby="simulation-title">
+    <h2 id="simulation-title">Walk through a request</h2>
+    <p class="muted">Choose an outcome, then press Next step. Watch the state on the left and the visible result on the right.</p>
+    <div class="controls">
+      <label for="outcome">Server response:</label>
+      <select id="outcome"><option value="success">Success — two cards</option><option value="error">Failure — request fails</option></select>
+      <button id="next" class="primary" type="button">Next step →</button>
+      <button id="reset" type="button">Start over</button>
+    </div>
+    <div aria-live="polite" aria-atomic="true"><p class="step-label" id="step-label"></p><p id="explanation"></p></div>
+    <div class="grid">
+      <article class="card" style="--accent:#208a76"><h3>Composable state</h3><dl class="values"><div><dt>data.value</dt><dd id="data-value"></dd></div><div><dt>loading.value</dt><dd id="loading-value"></dd></div><div><dt>error.value</dt><dd id="error-value"></dd></div></dl></article>
+      <article class="card"><h3>What the page passes</h3><pre id="props-code"></pre><p class="muted">Props go down. The loader reads them; it does not change them.</p></article>
+      <article class="card" style="--accent:#a66a12"><h3>What the user sees</h3><div class="screen" id="screen"></div><p class="muted" id="branch"></p></article>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>1. Export makes a function available</h2>
+    <div class="two"><div><p>In <strong>useFetch.js</strong>:</p><pre>export function useFetch(url) {
+    // Create state and a load function.
+    return { data, loading, error, load };
+}</pre></div><div><p>In <strong>Page.vue</strong>:</p><pre>import { useFetch } from '../composables/useFetch.js';
+
+const result = useFetch('/data');</pre></div></div>
+    <p><code>export</code> exposes the function to other files. <code>import</code> gives the page access to that function. Neither starts this request. Calling <code>useFetch('/data')</code> creates the state and returns it.</p>
+    <p>The returned <code>load</code> function remembers the URL <code>'/data'</code> and the refs created by that particular call.</p>
+  </section>
+
+  <section class="panel">
+    <h2>2. Return hands the state back to the page</h2>
+    <div class="two"><div><p>This shorthand:</p><pre>const { data, loading, error, load } = useFetch('/data');</pre></div><div><p>Means the same thing as:</p><pre>const result = useFetch('/data');
+const data = result.data;
+const loading = result.loading;
+const error = result.error;
+const load = result.load;</pre></div></div>
+    <p class="notice">The page receives the <strong>same ref objects</strong> that the composable created. They are not copies. When <code>load()</code> changes <code>data.value</code>, the page sees the new value.</p>
+    <p>A ref is a box Vue watches. JavaScript reads or writes its contents with <code>.value</code>. In a template, Vue unwraps these refs automatically.</p>
+    <pre>// JavaScript
+loading.value = false;
+
+// Vue template
+&lt;p v-if="loading"&gt;Loading…&lt;/p&gt;</pre>
+  </section>
+
+  <section class="panel">
+    <h2>3. Components communicate in three ways here</h2>
+    <table><thead><tr><th>Mechanism</th><th>Direction</th><th>Meaning</th></tr></thead><tbody>
+      <tr><td><strong>Props</strong><br><code>:loading="loading"</code></td><td>Page → Loader</td><td>“Here is my current loading value.” The left name is the child’s prop; the right expression reads the page’s variable.</td></tr>
+      <tr><td><strong>Event</strong><br><code>@retry="load"</code></td><td>Loader → Page</td><td>“The retry button was clicked.” The page listens and runs its load function.</td></tr>
+      <tr><td><strong>Slot</strong><br><code>&lt;slot /&gt;</code></td><td>Page supplies content</td><td>The page supplies its list HTML. The loader decides when to display it. That HTML still reads the page’s data.</td></tr>
+    </tbody></table>
+    <div class="flow"><span>Page’s loading ref changes</span><b class="arrow">→</b><span>Loader’s prop updates</span><b class="arrow">→</b><span>Vue updates the visible branch</span></div>
+    <p>The loader never fetches cards and never needs to know what a card is. It can wrap a customer list, a chart, or a profile using exactly the same rules.</p>
+  </section>
+
+  <section class="panel">
+    <h2>4. The complete three files</h2>
+    <p class="muted">These are learning examples, not changes to your application. The server is expected to return an object with a cards array.</p>
+    <details open><summary>composables/useFetch.js — the reusable logic</summary><pre>import { ref } from 'vue';
+
+export function useFetch(url) {
+    const data = ref(null);
+    const loading = ref(true);
+    const error = ref('');
+
+    async function load() {
+        loading.value = true;
+        error.value = '';
+
+        try {
+            const response = await fetch(url, {
+                headers: { Accept: 'application/json' },
+            });
+
+            if (!response.ok) {
+                throw new Error('Request failed');
+            }
+
+            data.value = await response.json();
+        } catch {
+            error.value = 'Could not load data.';
+        } finally {
+            loading.value = false;
+        }
+    }
+
+    return { data, loading, error, load };
+}</pre><p><code>async</code> allows <code>await</code>: this function waits for the response without freezing the browser. <code>catch</code> handles failure. <code>finally</code> finishes the loading state in either case.</p></details>
+    <details><summary>components/LoadingState.vue — the reusable display</summary><pre>&lt;script setup&gt;
+defineProps({
+    loading: Boolean,
+    error: String,
+});
+
+defineEmits(['retry']);
+&lt;/script&gt;
+
+&lt;template&gt;
+    &lt;div :aria-busy="loading"&gt;
+        &lt;p v-if="loading" role="status"&gt;Loading…&lt;/p&gt;
+
+        &lt;div v-else-if="error" role="alert"&gt;
+            &lt;p&gt;{{ error }}&lt;/p&gt;
+            &lt;button type="button" @click="$emit('retry')"&gt;
+                Try again
+            &lt;/button&gt;
+        &lt;/div&gt;
+
+        &lt;slot v-else /&gt;
+    &lt;/div&gt;
+&lt;/template&gt;</pre><p><code>defineProps</code> declares inputs. <code>defineEmits</code> declares events. Vue’s compiler understands these inside <code>&lt;script setup&gt;</code>. The component does not export these as ordinary JavaScript functions.</p></details>
+    <details><summary>pages/Page.vue — the coordinator</summary><pre>&lt;script setup&gt;
+import { onMounted } from 'vue';
+import Layout from '../components/Layout.vue';
+import LoadingState from '../components/LoadingState.vue';
+import { useFetch } from '../composables/useFetch.js';
+
+const { data, loading, error, load } = useFetch('/data');
+
+onMounted(load);
+&lt;/script&gt;
+
+&lt;template&gt;
+    &lt;Layout&gt;
+        &lt;h1&gt;Cards&lt;/h1&gt;
+
+        &lt;LoadingState
+            :loading="loading"
+            :error="error"
+            @retry="load"
+        &gt;
+            &lt;template v-if="data"&gt;
+                &lt;p v-if="data.cards.length === 0"&gt;No cards found.&lt;/p&gt;
+                &lt;ul v-else&gt;
+                    &lt;li v-for="card in data.cards" :key="card"&gt;
+                        {{ card }}
+                    &lt;/li&gt;
+                &lt;/ul&gt;
+            &lt;/template&gt;
+        &lt;/LoadingState&gt;
+    &lt;/Layout&gt;
+&lt;/template&gt;</pre><p>Importing a <code>.vue</code> file gives you a component. With <code>&lt;script setup&gt;</code>, imported components can be used directly in the template. <code>onMounted(load)</code> asks Vue to run the request after mounting this page.</p></details>
+  </section>
+
+  <section class="panel">
+    <h2>5. Does loading one page affect another?</h2>
+    <div class="two"><div><h3>Cards page</h3><pre>useFetch('/data')</pre><p>Creates its own data, loading, error, and load function.</p></div><div><h3>Customers page</h3><pre>useFetch('/customers')</pre><p>Creates a different set of data, loading, error, and load function.</p></div></div>
+    <p class="notice">These calls reuse the <strong>same logic</strong>, but do not share state. A store is useful when you deliberately want multiple components to share the same data.</p>
+    <p>A composable does not automatically cache requests or persist data after the page is destroyed. This example also leaves request cancellation and overlapping-request handling for a later lesson.</p>
+  </section>
+</main>
+<script>
+  const outcome = document.getElementById('outcome');
+  const next = document.getElementById('next');
+  let step = 0;
+  function render() {
+    const failed = outcome.value === 'error';
+    const descriptions = [
+      ['The page calls useFetch', 'useFetch("/data") creates three refs and a load function. It returns them to Page.vue. The request has not started yet.'],
+      ['Vue mounts the page', 'onMounted(load) now calls the returned function. load() sets loading to true, clears error, and sends GET /data.'],
+      ['The request is in progress', 'await fetch(...) is waiting for the server. The browser remains usable. LoadingState receives loading=true and displays its first branch.'],
+      failed ? ['The request fails', 'catch stores an error message. finally sets loading to false. The loader now displays the error and a retry button.'] : ['The response arrives', 'The response passes the status check. response.json() reads { cards: ["demodata", "demoata-2"] }. load() stores it in data and sets loading to false.'],
+      failed ? ['The loader offers a retry', 'Click Try again in the preview. In Vue, the child emits retry; the parent’s @retry="load" listener starts the request again. This demo repeats the selected failure outcome; select Success to start a successful walkthrough.'] : ['Vue shows the page’s slot', 'The loader has loading=false and no error. It renders its slot. The list inside that slot reads Page.vue’s data.cards and creates two list items.'],
+    ];
+    const done = step >= 3;
+    const data = done && !failed ? '{ cards: ["demodata", "demoata-2"] }' : 'null';
+    const error = done && failed ? 'Could not load data.' : '';
+    document.getElementById('step-label').textContent = `Step ${step + 1} of 5 — ${descriptions[step][0]}`;
+    document.getElementById('explanation').textContent = descriptions[step][1];
+    document.getElementById('data-value').textContent = data;
+    document.getElementById('loading-value').textContent = String(!done);
+    document.getElementById('error-value').textContent = JSON.stringify(error);
+    document.getElementById('props-code').textContent = `loading → ${!done}\nerror   → ${JSON.stringify(error)}\n\nretry event → load()`;
+    const screen = document.getElementById('screen');
+    screen.replaceChildren();
+    const message = document.createElement('p');
+    if (!done) {
+      message.textContent = 'Loading…';
+      screen.append(message);
+    } else if (failed) {
+      message.textContent = error;
+      const retry = document.createElement('button');
+      retry.type = 'button';
+      retry.textContent = 'Try again';
+      retry.addEventListener('click', () => { step = 1; render(); });
+      screen.append(message, retry);
+    } else {
+      const list = document.createElement('ul');
+      for (const card of ['demodata', 'demoata-2']) {
+        const item = document.createElement('li');
+        item.textContent = card;
+        list.append(item);
+      }
+      screen.append(list);
+    }
+    document.getElementById('branch').textContent = !done ? 'Selected branch: v-if="loading"' : failed ? 'Selected branch: v-else-if="error"' : 'Selected branch: <slot v-else />';
+    next.disabled = step === 4;
+  }
+  next.addEventListener('click', () => { step = Math.min(step + 1, 4); render(); });
+  document.getElementById('reset').addEventListener('click', () => { step = 0; render(); });
+  outcome.addEventListener('change', () => { step = 0; render(); });
+  render();
+</script>
+</body>
+</html>
