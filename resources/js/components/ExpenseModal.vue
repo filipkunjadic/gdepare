@@ -1,8 +1,11 @@
 <script setup>
 import { dialogBackdrop } from '../utils/dialogBackdrop.js';
 import DateInput from './DateInput.vue';
+import PayerPicker from './PayerPicker.vue';
+import TagPicker from './TagPicker.vue';
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { useExpensesStore } from '../stores/expenses.js';
+import { createPayerTagSelection } from '../utils/payerDefaultTags.js';
 
 const props = defineProps({ expense: { type: Object, default: null }, initialCategory: { type: String, default: 'expense' } });
 const backdrop = dialogBackdrop(close);
@@ -14,6 +17,8 @@ const deleting = ref(false);
 const errors = ref({});
 const message = ref('');
 const dialog = ref(null);
+const payersLoading = ref(true);
+const defaultTagsNotice = ref('');
 const today = new Date();
 const form = reactive({
     category: props.expense?.category ?? props.initialCategory,
@@ -24,8 +29,9 @@ const form = reactive({
     date: props.expense?.date ?? `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`,
     payment_method: props.expense?.payment_method ?? 'card',
     receiver: props.expense?.receiver.name ?? '',
-    tags: props.expense?.tags.map(tag => tag.name).join(', ') ?? '',
+    tags: props.expense?.tags.map(tag => tag.name) ?? [],
 });
+const payerTagSelection = createPayerTagSelection(form.tags, props.expense?.receiver.id ?? null);
 const categoryLabel = computed(() => form.category === 'savings' ? 'savings' : 'expense');
 const inputClass = 'mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 transition-colors focus:bg-white text-slate-900 focus:border-indigo-600 focus:outline-2 focus:outline-indigo-600';
 let previousOverflow;
@@ -45,8 +51,21 @@ function close() {
     if (!saving.value) dialog.value.close();
 }
 
+function selectPayer(payer) {
+    if (saving.value) return;
+    const result = payerTagSelection.select(payer);
+    form.tags = result.tags;
+    defaultTagsNotice.value = result.skipped ? 'Some default tags could not be added because a transaction can have up to 20 tags.' : '';
+}
+
+function updateTags(tags) {
+    form.tags = tags;
+    payerTagSelection.update(tags);
+    defaultTagsNotice.value = '';
+}
+
 async function save() {
-    if (saving.value || confirmingDelete.value) return;
+    if (saving.value || confirmingDelete.value || payersLoading.value) return;
     saving.value = true;
     errors.value = {};
     message.value = '';
@@ -59,7 +78,7 @@ async function save() {
             foreign_amount: form.category === 'savings' && form.foreign_amount !== '' ? form.foreign_amount : null,
             foreign_currency: form.category === 'savings' && form.foreign_amount !== '' ? 'EUR' : null,
             receiver: form.receiver.trim(),
-            tags: [...new Set(form.tags.split(',').map(tag => tag.trim()).filter(Boolean))],
+            tags: [...new Set(form.tags.map(tag => tag.trim()).filter(Boolean))],
         };
         if (props.expense) {
             await store.updateExpense(props.expense.id, data);
@@ -119,17 +138,15 @@ async function remove() {
                 </ul>
             </div>
             <fieldset :disabled="saving" class="flex min-w-0 flex-col gap-5">
-                <div>
-                    <label for="expense-category" class="block text-sm font-medium text-slate-700">Category</label>
-                    <select id="expense-category" v-model="form.category" :class="inputClass">
-                        <option value="expense">Expense</option>
-                        <option value="savings">Savings</option>
-                    </select>
-                </div>
+                <PayerPicker id="expense-receiver" v-model="form.receiver" :initial-payer="expense?.receiver" :label="form.category === 'savings' ? 'Savings destination' : 'Payer'" autofocus @selected="selectPayer" @loading="payersLoading = $event" />
+
                 <div>
                     <label for="expense-description" class="block text-sm font-medium text-slate-700">Description</label>
-                    <input id="expense-description" v-model="form.description" name="description" required maxlength="255" autofocus :placeholder="form.category === 'savings' ? 'e.g. Emergency fund' : 'e.g. Weekly groceries'" :class="inputClass">
+                    <input id="expense-description" v-model="form.description" name="description" required maxlength="255" :placeholder="form.category === 'savings' ? 'e.g. Emergency fund' : 'e.g. Weekly groceries'" :class="inputClass">
                 </div>
+
+                <TagPicker id="expense-tags" :model-value="form.tags" :initial-tags="expense?.tags" @update:model-value="updateTags" />
+                <p v-if="defaultTagsNotice" role="status" class="-mt-3 text-xs text-amber-700">{{ defaultTagsNotice }}</p>
 
                 <div class="grid gap-5 sm:grid-cols-2">
                     <div>
@@ -146,7 +163,7 @@ async function remove() {
                     </div>
                     <div>
                         <label for="expense-date" class="block text-sm font-medium text-slate-700">Date</label>
-                        <DateInput id="expense-date" v-model="form.date" name="date" required :class="inputClass" />
+                        <DateInput id="expense-date" v-model="form.date" name="date" required :disabled="saving" class="mt-2" />
                     </div>
                     <div>
                         <label for="expense-payment" class="block text-sm font-medium text-slate-700">Payment method</label>
@@ -161,16 +178,6 @@ async function remove() {
 
                 <p v-if="form.category === 'savings'" id="savings-amount-help" class="-mt-2 text-sm text-slate-500">RSD is deducted from your balance. Enter the EUR value to show it in the Savings widget.</p>
 
-                <div>
-                    <label for="expense-receiver" class="block text-sm font-medium text-slate-700">{{ form.category === 'savings' ? 'Savings destination' : 'Receiver' }}</label>
-                    <input id="expense-receiver" v-model="form.receiver" name="receiver" required maxlength="255" :placeholder="form.category === 'savings' ? 'e.g. Savings account or cash reserve' : 'Who did you pay?'" :class="inputClass">
-                </div>
-                <div>
-                    <label for="expense-tags" class="block text-sm font-medium text-slate-700">Tags <span class="font-normal text-slate-500">(optional)</span></label>
-                    <input id="expense-tags" v-model="form.tags" name="tags" aria-describedby="expense-tags-help" placeholder="e.g. Food, Household" :class="inputClass">
-                    <p id="expense-tags-help" class="mt-2 text-sm text-slate-500">Separate tags with commas.</p>
-                </div>
-
                 <div v-if="confirmingDelete" class="rounded-lg border border-red-200 bg-red-50 p-4">
                     <p class="text-sm font-medium text-red-900">Delete this {{ categoryLabel }} permanently?</p>
                     <p class="mt-1 text-sm text-red-700">This cannot be undone.</p>
@@ -182,7 +189,7 @@ async function remove() {
                 <div v-else class="flex flex-wrap justify-end gap-3 border-t border-slate-200 pt-5">
                     <button v-if="expense" type="button" class="mr-auto rounded-lg px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-red-600" @click="confirmingDelete = true">Delete</button>
                     <button type="button" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-indigo-600" @click="close">Cancel</button>
-                    <button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-indigo-600 disabled:cursor-wait disabled:opacity-50">{{ saving ? 'Saving…' : (expense ? 'Save changes' : 'Save ' + categoryLabel) }}</button>
+                    <button type="submit" :disabled="payersLoading" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-indigo-600 disabled:cursor-wait disabled:opacity-50">{{ saving ? 'Saving…' : (expense ? 'Save changes' : 'Save ' + categoryLabel) }}</button>
                 </div>
             </fieldset>
         </form>

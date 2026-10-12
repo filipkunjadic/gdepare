@@ -150,7 +150,9 @@ test('payer grid includes every payer sorted by amount without savings or mixed 
     assert.equal(rsd[0].amount, '30.00');
     assert.equal(rsd[0].percentage, 30);
     assert.equal(rsd[0].count, 2);
+    assert.equal(rsd[0].averageAmount, '15.00');
     assert.equal(groups.find(group => group.currency === 'EUR').percentage, 100);
+    assert.equal(groups.find(group => group.currency === 'EUR').averageAmount, '5.00');
     assert.equal(new Set(groups.map(group => group.key)).size, 9);
 });
 
@@ -195,4 +197,51 @@ test('dashboard tag groups retain their icon and chosen color', () => {
     assert.equal(groups[0].icon, 'home');
     assert.equal(groups[0].color, '#12abef');
     assert.equal(groups[0].amount, '20.00');
+});
+
+test('tag averages use only matching transactions and count overlapping tags once per transaction', () => {
+    const food = { id: 1, name: 'Food' };
+    const home = { id: 2, name: 'Home' };
+    const expenses = [
+        { ...record('10.00'), tags: [food, home, food] },
+        { ...record('30.00'), tags: [food] },
+        { ...record('60.00'), tags: [] },
+        { ...record('900.00'), category: 'savings', tags: [food] },
+        { ...record('5.00', 'EUR'), tags: [food] },
+    ];
+
+    const groups = calculateTransactionGroups(expenses, 'expense', 'tag');
+
+    assert.deepEqual(groups.map(({ currency, label, count, averageAmount }) => ({ currency, label, count, averageAmount })), [
+        { currency: 'EUR', label: 'Food', count: 1, averageAmount: '5.00' },
+        { currency: 'RSD', label: 'Food', count: 2, averageAmount: '20.00' },
+        { currency: 'RSD', label: 'Home', count: 1, averageAmount: '10.00' },
+    ]);
+});
+
+for (const { name, amounts, expected } of [
+    { name: 'one transaction', amounts: ['12.34'], expected: '12.34' },
+    { name: 'zero amounts', amounts: ['0.00', '0.00'], expected: '0.00' },
+    { name: 'exact half cent', amounts: ['0.01', '0.02'], expected: '0.02' },
+    { name: 'below half cent', amounts: ['0.01', '0.01', '0.02'], expected: '0.01' },
+    { name: 'above half cent', amounts: ['0.01', '0.02', '0.02'], expected: '0.02' },
+]) {
+    test(`transaction averages round to the nearest cent: ${name}`, () => {
+        const expenses = amounts.map(amount => ({ ...record(amount), receiver: { id: 1, name: 'Shop' } }));
+
+        const groups = calculateTransactionGroups(expenses, 'expense');
+
+        assert.equal(groups[0].averageAmount, expected);
+    });
+}
+
+test('averages preserve cent precision when accumulated totals exceed the safe integer range', () => {
+    const expenses = Array.from({ length: 100 }, (_, index) => ({
+        ...record(index === 0 ? '999999999999.49' : '999999999999.99'), receiver: { id: 1, name: 'Shop' },
+    }));
+
+    const groups = calculateTransactionGroups(expenses, 'expense');
+
+    assert.equal(groups[0].count, 100);
+    assert.equal(groups[0].averageAmount, '999999999999.99');
 });

@@ -9,15 +9,21 @@ import LoadingState from '../components/LoadingState.vue';
 import TransactionSummaryGrid from '../components/TransactionSummaryGrid.vue';
 import ExpenseModal from '../components/ExpenseModal.vue';
 import IncomeModal from '../components/IncomeModal.vue';
+import AddTransactionButton from '../components/AddTransactionButton.vue';
+import PageHeading from '../components/PageHeading.vue';
 import BalanceSummary from '../components/BalanceSummary.vue';
 import FinancialCharts from '../components/FinancialCharts.vue';
 import { useIncomesStore } from '../stores/incomes.js';
 import { calculateBalances, calculateTransactionGroups } from '../utils/balances.js';
 import { useExpensesStore } from '../stores/expenses.js';
+import { getPayers } from '../api/payers.js';
 
 const store = useExpensesStore();
 const router = useRouter();
 const incomeStore = useIncomesStore();
+const payers = ref([]);
+const payersLoading = ref(true);
+const payersError = ref('');
 const period = usePeriodStore();
 const monthlyExpenses = computed(() => recordsForMonth(store.expenses, period.month));
 const monthlyIncomes = computed(() => recordsForMonth(incomeStore.incomes, period.month));
@@ -32,6 +38,19 @@ const balances = computed(() => {
 function refresh() {
     store.loadExpenses(true);
     incomeStore.loadIncomes(true);
+    loadPayers();
+}
+
+async function loadPayers() {
+    payersLoading.value = true;
+    payersError.value = '';
+    try {
+        payers.value = await getPayers();
+    } catch (error) {
+        payersError.value = error.message;
+    } finally {
+        payersLoading.value = false;
+    }
 }
 const showingExpenseModal = ref(false);
 const newCategory = ref('expense');
@@ -39,13 +58,18 @@ const successMessage = ref('');
 const editingExpense = ref(null);
 const editingIncome = ref(null);
 
-const payerGroups = computed(() => calculateTransactionGroups(monthlyExpenses.value, 'expense'));
+const payerGroups = computed(() => {
+    const payerImages = new Map(payers.value.map(payer => [payer.id, payer.image_url]));
+    return calculateTransactionGroups(monthlyExpenses.value, 'expense')
+        .map(group => ({ ...group, image_url: payerImages.get(group.id) ?? null }));
+});
 const expenseTagGroups = computed(() => calculateTransactionGroups(monthlyExpenses.value, 'expense', 'tag'));
 const incomeTagGroups = computed(() => calculateTransactionGroups(monthlyIncomes.value, 'income', 'tag'));
 
 onMounted(() => {
     store.loadExpenses();
     incomeStore.loadIncomes();
+    loadPayers();
 });
 </script>
 
@@ -54,35 +78,15 @@ onMounted(() => {
 
         <main class="text-slate-900">
             <div class="mx-auto max-w-[1600px] px-4 py-8 sm:px-6 lg:px-8 lg:py-8">
-                <div class="mb-6 flex flex-wrap items-center justify-between gap-5">
-                    <div class="flex flex-wrap items-center gap-4">
-                        <h1 class="text-2xl font-semibold tracking-tight text-slate-950">Dashboard</h1>
-                        <MonthSelector />
-                    </div>
-                    <div class="flex flex-wrap items-center gap-3">
-                        <button type="button" class="rounded-xl border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-semibold text-violet-700 hover:bg-violet-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-600" @click="successMessage = ''; editingExpense = null; newCategory = 'savings'; showingExpenseModal = true">+ Add savings</button>
-                        <button type="button" class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 transition-colors hover:bg-emerald-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600" @click="successMessage = ''; editingIncome = null; showingIncomeModal = true">
-                            + Add income
-                        </button>
-                        <button
-                            type="button"
-                            class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-indigo-200 transition-colors hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                            @click="successMessage = ''; editingExpense = null; newCategory = 'expense'; showingExpenseModal = true"
-                        >
-                            + Add expense
-                        </button>
-                        <button
-                            type="button"
-                            :disabled="store.loading || incomeStore.loading"
-                            class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-wait disabled:opacity-50"
-                            @click="refresh"
-                        >
-                            Refresh
-                        </button>
-                    </div>
-                </div>
+                <PageHeading title="Dashboard" description="Your income, spending, and savings at a glance.">
+                    <template #icon><svg class="size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></svg></template>
+                    <AddTransactionButton kind="savings" @click="successMessage = ''; editingExpense = null; newCategory = 'savings'; showingExpenseModal = true" />
+                    <AddTransactionButton kind="income" @click="successMessage = ''; editingIncome = null; showingIncomeModal = true" />
+                    <AddTransactionButton kind="expense" @click="successMessage = ''; editingExpense = null; newCategory = 'expense'; showingExpenseModal = true" />
+                </PageHeading>
 
                 <p v-if="successMessage" role="status" class="mb-5 rounded-lg bg-green-50 p-3 text-sm text-green-800">{{ successMessage }}</p>
+                <div class="mb-5 flex flex-wrap items-center gap-3"><MonthSelector /></div>
 
                 <LoadingState
                     :loading="store.loading || incomeStore.loading || (!store.loaded && !store.error) || (!incomeStore.loaded && !incomeStore.error)"
@@ -94,8 +98,8 @@ onMounted(() => {
                 </LoadingState>
 
                 <LoadingState
-                    :loading="store.loading || incomeStore.loading || (!store.loaded && !store.error) || (!incomeStore.loaded && !incomeStore.error)"
-                    :error="store.error || incomeStore.error"
+                    :loading="store.loading || incomeStore.loading || payersLoading || (!store.loaded && !store.error) || (!incomeStore.loaded && !incomeStore.error)"
+                    :error="store.error || incomeStore.error || payersError"
                     @retry="refresh"
                 >
                     <div class="flex flex-col gap-7">

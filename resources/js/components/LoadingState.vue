@@ -2,6 +2,7 @@
 defineProps({
     loading: Boolean,
     error: String,
+    label: { type: String, default: 'Loading your transactions…' },
 });
 
 defineEmits(['retry']);
@@ -10,7 +11,7 @@ defineEmits(['retry']);
 <template>
     <div :aria-busy="loading">
         <div v-if="loading" role="status" class="mb-6 rounded-2xl border border-slate-200 bg-white p-6">
-            <p class="mb-5 flex items-center gap-2 text-sm font-medium text-slate-600"><span aria-hidden="true" class="size-2 rounded-full bg-indigo-500 motion-safe:animate-pulse"></span>Loading your transactions…</p>
+            <p class="mb-5 flex items-center gap-2 text-sm font-medium text-slate-600"><span aria-hidden="true" class="size-2 rounded-full bg-indigo-500 motion-safe:animate-pulse"></span>{{ label }}</p>
             <div aria-hidden="true" class="flex flex-col gap-4 motion-safe:animate-pulse">
                 <div class="h-4 w-1/3 rounded bg-slate-100"></div>
                 <div class="h-4 w-2/3 rounded bg-slate-100"></div>

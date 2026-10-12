@@ -131,6 +131,7 @@ export function calculateTransactionGroups(records, kind, groupBy = 'source') {
         .map(({ cents, ...group }) => ({
             ...group,
             amount: toDecimal(cents),
+            averageAmount: toDecimal((cents + BigInt(group.count) / 2n) / BigInt(group.count)),
             percentage: totals.get(group.currency) === 0n ? 0
                 : Number((cents * 10000n + totals.get(group.currency) / 2n) / totals.get(group.currency)) / 100,
         }));

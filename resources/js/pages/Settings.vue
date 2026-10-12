@@ -1,6 +1,7 @@
 <script setup>
 import { computed, reactive, ref } from 'vue';
 import DashboardLayout from '../components/DashboardLayout.vue';
+import PageHeading from '../components/PageHeading.vue';
 import { useAuthStore } from '../stores/auth.js';
 import { updateSettings } from '../api/settings.js';
 import { session } from '../session.js';
@@ -32,7 +33,9 @@ async function save() {
 <template>
     <DashboardLayout>
         <main class="mx-auto max-w-[1600px] px-4 py-8 sm:px-6 lg:px-8">
-            <h1 class="mb-6 text-2xl font-semibold tracking-tight text-slate-950">Settings</h1>
+            <PageHeading title="Settings" description="Manage your profile and display preferences.">
+                <template #icon><svg class="size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 7h16M4 17h16M8 4v6m8 4v6" stroke-linecap="round" stroke-linejoin="round" /></svg></template>
+            </PageHeading>
             <form class="max-w-xl rounded-xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6" :aria-busy="saving" @submit.prevent="save" @input="saved = false">
                 <p v-if="error" role="alert" class="mb-5 rounded-lg bg-red-50 p-3 text-sm text-red-700">{{ error }}</p>
                 <p v-if="saved" role="status" class="mb-5 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">Settings saved.</p>

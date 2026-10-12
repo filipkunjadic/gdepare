@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue';
 import DashboardLayout from '../components/DashboardLayout.vue';
+import PageHeading from '../components/PageHeading.vue';
 import { usePeriodStore } from '../stores/period.js';
 import { getReport } from '../api/reports.js';
 
@@ -43,7 +44,9 @@ async function download() {
 <template>
     <DashboardLayout>
         <main class="mx-auto max-w-[1600px] px-4 py-8 sm:px-6 lg:px-8">
-            <h1 class="mb-6 text-2xl font-semibold tracking-tight text-slate-950">Reports</h1>
+            <PageHeading title="Reports" description="Export your income, expenses, and savings as a PDF.">
+                <template #icon><svg class="size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 3h8l4 4v14H6V3Zm8 0v5h4M9 12h6m-6 4h6" stroke-linecap="round" stroke-linejoin="round" /></svg></template>
+            </PageHeading>
             <form class="max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6" :aria-busy="generating" @submit.prevent="download">
                 <h2 class="text-base font-semibold text-slate-900">Financial report</h2>
                 <p class="mt-2 text-sm text-slate-500">Download your balance summary and all income, expense, and savings transactions as a PDF.</p>

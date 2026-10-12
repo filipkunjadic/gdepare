@@ -1,6 +1,7 @@
 <script setup>
 import { dialogBackdrop } from '../utils/dialogBackdrop.js';
 import DateInput from './DateInput.vue';
+import TagPicker from './TagPicker.vue';
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { useIncomesStore } from '../stores/incomes.js';
 
@@ -17,7 +18,7 @@ const dialog = ref(null);
 const today = new Date();
 const form = reactive({
     description: props.income?.description ?? '',
-    tags: props.income?.tags?.map(tag => tag.name).join(', ') ?? '',
+    tags: props.income?.tags?.map(tag => tag.name) ?? [],
     amount: props.income?.amount ?? '',
     currency: props.income?.currency ?? 'RSD',
     date: props.income?.date ?? `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`,
@@ -49,7 +50,7 @@ async function save() {
     try {
         const data = {
             ...form,
-            tags: [...new Set(form.tags.split(',').map(tag => tag.trim()).filter(Boolean))],
+            tags: [...new Set(form.tags.map(tag => tag.trim()).filter(Boolean))],
             description: form.description.trim(),
             currency: form.currency.trim().toUpperCase(),
         };
@@ -116,6 +117,8 @@ async function remove() {
                     <input id="income-description" v-model="form.description" name="description" maxlength="255" autofocus placeholder="e.g. Salary or freelance work" :class="inputClass">
                 </div>
 
+                <TagPicker id="income-tags" v-model="form.tags" :initial-tags="income?.tags" />
+
                 <div class="grid gap-5 sm:grid-cols-2">
                     <div>
                         <label for="income-amount" class="block text-sm font-medium text-slate-700">Amount</label>
@@ -127,14 +130,8 @@ async function remove() {
                     </div>
                     <div>
                         <label for="income-date" class="block text-sm font-medium text-slate-700">Date</label>
-                        <DateInput id="income-date" v-model="form.date" name="date" required :class="inputClass" />
+                        <DateInput id="income-date" v-model="form.date" name="date" required :disabled="saving" accent="emerald" class="mt-2" />
                     </div>
-                </div>
-
-                <div>
-                    <label for="income-tags" class="block text-sm font-medium text-slate-700">Tags (optional)</label>
-                    <input id="income-tags" v-model="form.tags" name="tags" aria-describedby="income-tags-help" placeholder="e.g. Salary, Freelance" :class="inputClass">
-                    <p id="income-tags-help" class="mt-2 text-sm text-slate-500">Separate tags with commas. Use the same tags for income and expenses.</p>
                 </div>
 
                 <div v-if="confirmingDelete" class="rounded-lg border border-red-200 bg-red-50 p-4">
